@@ -25,6 +25,7 @@ func main() {
 		fmt.Println("Invalid start range")
 		os.Exit(1)
 	}
+	
 	end, err := strconv.Atoi(os.Args[3])
 	if err != nil || end > 65535 {
 		fmt.Println("Invalid end range")
