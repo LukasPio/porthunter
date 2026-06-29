@@ -3,32 +3,33 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"sync"
 	"time"
 )
 
-var targetIp string
+const MaxIpToScanPerHostname = 3
 
 func main() {
 
 	if len(os.Args) < 4 {
-		println("Missing parameters\nUsage: porthunter <ip-address> <range-start> <range-end>\nExample: porthunter 192.168.0.1 1 100 - ports across 1 and 100 on 192.168.0.1")
+		printUsageAndExample()
 		os.Exit(1)
 	}
 
-	targetIp = os.Args[1]
+	target := os.Args[1]
 
 	start, err := strconv.Atoi(os.Args[2])
 	if err != nil {
-		fmt.Println("Invalid start range")
+		printUsageAndExample()
 		os.Exit(1)
 	}
-	
+
 	end, err := strconv.Atoi(os.Args[3])
 	if err != nil || end > 65535 {
-		fmt.Println("Invalid end range")
+		printUsageAndExample()
 		os.Exit(1)
 	}
 
@@ -45,22 +46,50 @@ func main() {
 	workersAmount := (end - start) / 50
 
 	if workersAmount < 1 {
-    	workersAmount = 1
+		workersAmount = 1
 	}
 
 	if workersAmount > 1000 {
-    	workersAmount = 1000
+		workersAmount = 1000
 	}
 
+	var ips [MaxIpToScanPerHostname]net.IP
+
+	if net.ParseIP(target) != nil {
+		scanSingleIp(target, start, end, workersAmount)
+		return
+	}
+
+	ips = resolveHostname(target)
+
+	counter := 0
+	for _, ip := range ips {
+		if ip != nil {
+			counter++
+		}
+	}
+
+	if counter > 1 {
+		fmt.Println(target + " resolved in multiple ips. " + "scanning " + strconv.Itoa(counter) + " ips...")
+	}
+
+	for _, ip := range ips {
+		if ip != nil {
+			scanSingleIp(ip.String(), start, end, workersAmount)
+		}
+	}
+}
+
+func scanSingleIp(ip string, start int, end int, workersAmount int) {
 	var wg sync.WaitGroup
 	ports := make(chan int, workersAmount)
 
 	for i := 0; i < workersAmount; i++ {
 		wg.Add(1)
-		go scanPorts(ports, &wg)
+		go scanPorts(ip, ports, &wg)
 	}
 
-	fmt.Println("Scanning for ports on " + targetIp)
+	fmt.Println("Scanning for ports on " + ip)
 
 	for i := start; i < end+1; i++ {
 		ports <- i
@@ -71,18 +100,53 @@ func main() {
 	wg.Wait()
 }
 
-func scanPorts(ports <-chan int, wg *sync.WaitGroup) {
+func scanPorts(target string, ports <-chan int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for port := range ports {
 
 		portToString := strconv.Itoa(port)
 
-		connection, error := net.DialTimeout("tcp", targetIp+":"+portToString, 2*time.Second)
+		conn, err := net.DialTimeout("tcp", target+":"+portToString, 3*time.Second)
 
-		if error == nil {
-			connection.Close()
+		if err == nil {
+			conn.Close()
 			fmt.Println("Porta " + portToString + " aberta!")
 		}
 	}
+}
+
+func printUsageAndExample() {
+	fmt.Println("Usage: porthunter <ip-address> <range-start> <range-end>\nExample: porthunter 192.168.0.1 1 100 - ports across 1 and 100 on 192.168.0.1")
+}
+
+func resolveHostname(hostname string) [MaxIpToScanPerHostname]net.IP {
+	ips, err := net.LookupIP(hostname)
+	if err != nil {
+		fmt.Println("Couldn't resolve hostname " + hostname + ":\n" + err.Error())
+		os.Exit(2)
+	}
+
+	var ipv4ips [MaxIpToScanPerHostname]net.IP
+	counter := 0
+
+	for _, ip := range ips {
+		addr, err := netip.ParseAddr(ip.String())
+		if err != nil {
+			fmt.Println("Internal error resolving hostname: " + err.Error())
+			os.Exit(3)
+		}
+		if addr.Is4() {
+
+			if counter > MaxIpToScanPerHostname {
+				fmt.Println("Max ip is set to " + strconv.Itoa(MaxIpToScanPerHostname) + ". skiping some ips")
+				break
+			}
+
+			ipv4ips[counter] = ip
+			counter++
+		}
+	}
+
+	return ipv4ips
 }
