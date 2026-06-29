@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -80,6 +81,10 @@ func main() {
 	}
 }
 
+func printUsageAndExample() {
+	fmt.Println("Usage: porthunter <ip-address> <range-start> <range-end>\nExample: porthunter 192.168.0.1 1 100 - ports across 1 and 100 on 192.168.0.1")
+}
+
 func scanSingleIp(ip string, start int, end int, workersAmount int) {
 	var wg sync.WaitGroup
 	ports := make(chan int, workersAmount)
@@ -89,7 +94,8 @@ func scanSingleIp(ip string, start int, end int, workersAmount int) {
 		go scanPorts(ip, ports, &wg)
 	}
 
-	fmt.Println("Scanning for ports on " + ip)
+	fmt.Print("Scanning for ports on " + ip + "\n")
+	fmt.Println("=======================================")
 
 	for i := start; i < end+1; i++ {
 		ports <- i
@@ -98,26 +104,6 @@ func scanSingleIp(ip string, start int, end int, workersAmount int) {
 	close(ports)
 
 	wg.Wait()
-}
-
-func scanPorts(target string, ports <-chan int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	for port := range ports {
-
-		portToString := strconv.Itoa(port)
-
-		conn, err := net.DialTimeout("tcp", target+":"+portToString, 3*time.Second)
-
-		if err == nil {
-			conn.Close()
-			fmt.Println("Porta " + portToString + " aberta!")
-		}
-	}
-}
-
-func printUsageAndExample() {
-	fmt.Println("Usage: porthunter <ip-address> <range-start> <range-end>\nExample: porthunter 192.168.0.1 1 100 - ports across 1 and 100 on 192.168.0.1")
 }
 
 func resolveHostname(hostname string) [MaxIpToScanPerHostname]net.IP {
@@ -149,4 +135,63 @@ func resolveHostname(hostname string) [MaxIpToScanPerHostname]net.IP {
 	}
 
 	return ipv4ips
+}
+
+func scanPorts(target string, ports <-chan int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for port := range ports {
+		portToString := strconv.Itoa(port)
+
+		conn, err := net.DialTimeout("tcp", target+":"+portToString, 3*time.Second)
+
+		if err == nil {
+			tryGrabBanner(conn, portToString)
+		}
+	}
+}
+
+func tryGrabBanner(conn net.Conn, port string) {
+	buffer := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, err := conn.Read(buffer)
+	if err == nil {
+		banner := string(buffer)
+		service := identifyBanner(banner)
+		if service == "" {
+			printPortWithoutService(port)
+		} else {
+			printPortAndService(port, service, banner)
+		}
+		conn.Close()
+		return
+	}
+
+	printPortWithoutService(port)
+	conn.Close()
+}
+
+func identifyBanner(banner string) string {
+	switch {
+	case strings.Contains(banner, "SSH"):
+		return "SSH"
+	case strings.Contains(banner, "FTP"):
+		return "FTP"
+	case strings.Contains(banner, "SMTP"):
+		return "SMTP"
+	default:
+		return ""
+	}
+}
+
+func printPortWithoutService(port string) {
+	fmt.Println("Porta " + port + " aberta. Não foi possível identificar o serviço")
+	fmt.Println("=======================================")
+}
+
+func printPortAndService(port string, service string, banner string) {
+	fmt.Println("Porta: " + port)
+	fmt.Println("Serviço: " + service)
+	fmt.Print("Banner: " + banner)
+	fmt.Println("=======================================")
 }
