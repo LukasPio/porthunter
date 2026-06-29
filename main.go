@@ -186,8 +186,10 @@ func resolveHostname(hostname string) [MaxIpToScanPerHostname]net.IP {
 				fmt.Fprintln(writer,"Resolved the hostname " + hostname + " to " + addr.String())
 			}			
 
-			if counter >= MaxIpToScanPerHostname && verbose {
-				fmt.Fprintln(writer,"Max ip is set to " + strconv.Itoa(MaxIpToScanPerHostname) + ". skiping some ips")
+			if counter >= MaxIpToScanPerHostname {
+				if verbose {
+					fmt.Fprintln(writer,"Max ip is set to " + strconv.Itoa(MaxIpToScanPerHostname) + ". skiping some ips")
+				}
 				break
 			}
 
@@ -225,9 +227,9 @@ func tryIdentifyService(conn net.Conn, port string) {
 		banner := string(buffer)
 		service := identifyBanner(banner)
 		if service == "" {
-			printPortAndService(port, service, banner, false)
-		} else {
 			printPortAndService(port, service, banner, true)
+		} else {
+			printPortAndService(port, service, banner, false)
 		}
 		conn.Close()
 		return
