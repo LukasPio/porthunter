@@ -98,6 +98,19 @@ This keeps small scans lightweight while allowing large scans to complete much f
 - Does not support UDP scanning
 - No structured output formats (JSON/XML)
 
+## Next Steps / Planned Improvements
+- [ ] UDP scan support
+- [ ] Structured output (JSON/XML) for integration with other tools
+- [ ] IPv6 support
+- [ ] Detection of more services (HTTP, HTTPS, MySQL, RDP, etc.)
+- [ ] Basic OS fingerprinting
+- [ ] CIDR support (scan a range of IPs, not just a single host)
+- [ ] Config file for flags/options
+- [ ] Progress bar during scans
+- [ ] Randomized port scan order
+- [ ] Configurable rate limiting (to avoid overwhelming the network/target)
+- [ ] Automated tests (unit tests)
+
 ## Learning Goals
 This project explores several Go concepts, including:
 - Goroutines and channels
