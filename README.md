@@ -1,27 +1,32 @@
 # PortHunter
-PortHunter is a simple multithreaded TCP port scanner written in Go. It scans a range of ports on a target host using goroutines and channels, with optional service detection via banner grabbing.
 
-> This project was built as a learning exercise to better understand Go concurrency, networking, and how basic port scanners such as Nmap work internally.
+PortHunter is a simple concurrent TCP port scanner written in Go. It scans a range of TCP ports on a target host using goroutines and channels, with optional banner grabbing for basic service identification.
+
+> This project was built as a learning exercise to better understand Go concurrency, networking, and how basic port scanners such as Nmap work internally. It is now considered feature complete and is no longer under active development.
 
 ## Features
+
 - Scan any TCP port range
-- Concurrent scanning using goroutines
+- Concurrent scanning using goroutines and channels
 - Automatic worker scaling
-- Connection timeout to avoid hanging
-- Hostname resolution with support for up to 3 IPv4 addresses
-- Optional service/banner identification (`-sV`)
+- Connection timeout to avoid hanging on filtered hosts
+- Hostname resolution (up to 3 IPv4 addresses)
+- Basic banner grabbing (`-sV`)
 - Verbose mode (`-v`)
-- Save output to file (`-o`)
+- Save scan output to `output.txt` (`-o`)
 
 ## Requirements
+
 - Go 1.20 or newer
 
 ## Building
+
 ```bash
 go build -o porthunter
 ```
 
 ## Usage
+
 ```bash
 porthunter <target> <start-port> <end-port> [options]
 ```
@@ -30,21 +35,26 @@ porthunter <target> <start-port> <end-port> [options]
 
 | Flag | Description |
 |------|-------------|
-| `-v`  | Verbose mode — shows timestamps, resolved IPs, and diagnostic info |
-| `-sV` | Service scan — attempts to grab banners and identify services |
-| `-o`  | Save output to `output.txt` |
+| `-v` | Enables verbose output |
+| `-sV` | Attempts to identify services through banner grabbing |
+| `-o` | Saves all program output to `output.txt` |
 
-Up to 3 options can be combined in any order.
+Up to three options can be combined.
 
-### Examples
+## Examples
+
 ```bash
 porthunter scanme.nmap.org 1 1000
-porthunter 192.168.1.1 20 1024 -v -sV -o
+
+porthunter 192.168.1.10 20 1024 -v
+
+porthunter scanme.nmap.org 1 1000 -v -sV -o
 ```
 
 ## Example Output
 
-**Standard scan:**
+### Standard scan
+
 ```text
 Scanning for ports on 45.33.32.156
 =======================================
@@ -53,7 +63,8 @@ Port 80 is open
 Port 9929 is open
 ```
 
-**With `-sV` (service scan):**
+### Banner grabbing (`-sV`)
+
 ```text
 Scanning for ports on 45.33.32.156
 =======================================
@@ -61,12 +72,12 @@ Port: 22
 Service: SSH
 Banner: SSH-2.0-OpenSSH_6.6.1p1 Ubuntu-2ubuntu2.13
 =======================================
-Port 80 is open. Could not identify service.
 ```
 
-**With `-v` (verbose):**
+### Verbose mode
+
 ```text
-Program starting at 2024-11-03T21:04:05.000-03:00
+Program starting at 2026-07-21T19:30:00.000Z
 Verbose mode activated...
 Resolved the hostname scanme.nmap.org to 45.33.32.156
 Scanning for ports on 45.33.32.156
@@ -75,50 +86,55 @@ Port 22 is open
 ```
 
 ## How It Works
-1. Validates command-line arguments and parses any option flags.
-2. If a hostname is given, resolves it to up to 3 IPv4 addresses.
-3. Calculates an appropriate number of worker goroutines based on the scan range.
-4. Creates a channel containing every port in the specified range.
-5. Worker goroutines receive ports from the channel and attempt TCP connections using `net.DialTimeout`.
-6. If `-sV` is set, attempts to read a banner and identify the service (SSH, FTP, SMTP).
-7. If `-o` is set, all output is also written to `output.txt`.
-8. The program waits for every worker to finish before exiting.
+
+1. Parses and validates command-line arguments.
+2. Resolves hostnames to IPv4 addresses when necessary.
+3. Calculates an appropriate number of worker goroutines.
+4. Sends every port in the requested range through a channel.
+5. Workers perform TCP connect scans using `net.DialTimeout`.
+6. If `-sV` is enabled, attempts to read and identify service banners.
+7. If `-o` is enabled, output is also written to `output.txt`.
+8. Waits for all workers to complete before exiting.
 
 ## Worker Scaling
-The number of workers is automatically calculated based on the scan range size.
+
+Workers are automatically chosen based on the scan range.
+
 - Minimum: **1 worker**
 - Maximum: **1000 workers**
 
-This keeps small scans lightweight while allowing large scans to complete much faster.
-
 ## Limitations
+
 - TCP connect scan only
-- Service identification limited to SSH, FTP, and SMTP
-- Does not perform OS fingerprinting
-- Does not support UDP scanning
+- IPv4 only
+- Banner detection limited to SSH, FTP and SMTP
+- Banner grabbing depends on the service sending data immediately after connection
+- No UDP scanning
+- No OS fingerprinting
+- No CIDR/network scanning
 - No structured output formats (JSON/XML)
 
-## Next Steps / Planned Improvements
-- [ ] UDP scan support
-- [ ] Structured output (JSON/XML) for integration with other tools
-- [ ] IPv6 support
-- [ ] Detection of more services (HTTP, HTTPS, MySQL, RDP, etc.)
-- [ ] Basic OS fingerprinting
-- [ ] CIDR support (scan a range of IPs, not just a single host)
-- [ ] Config file for flags/options
-- [ ] Progress bar during scans
-- [ ] Randomized port scan order
-- [ ] Configurable rate limiting (to avoid overwhelming the network/target)
-- [ ] Automated tests (unit tests)
+## Technologies Used
+
+- Go
+- Goroutines
+- Channels
+- WaitGroups
+- `net.DialTimeout`
+- `io.MultiWriter`
 
 ## Learning Goals
-This project explores several Go concepts, including:
+
+This project was primarily created to practice:
+
+- Go concurrency
 - Goroutines and channels
 - WaitGroups
-- TCP networking with timeouts
-- CLI argument parsing
-- Concurrent programming patterns
-- I/O multiplexing with `io.MultiWriter`
+- TCP networking
+- CLI application development
+- Concurrent worker pool patterns
+- Basic service detection through banner grabbing
 
 ## Disclaimer
+
 Use this software only on systems that you own or have explicit permission to scan. Unauthorized port scanning may violate network policies or local laws.
